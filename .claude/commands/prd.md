@@ -1,8 +1,8 @@
-Read and follow **docs/workflows/prd.md** in full. That file is the canonical workflow for all tools and teammates.
+Follow **docs/workflows/prd.md** start to finish — that's where the real instructions live, kept in one place so every tool reads the same version.
 
 ---
 
-**Usage:**
+**Give it:**
 
 ```
 Feature: <name>

@@ -1,10 +1,10 @@
-Read and follow **docs/workflows/pr.md** in full. Canonical workflow for all tools and teammates.
+Follow **docs/workflows/pr.md** start to finish — the full playbook lives there, not here.
 
-Default to **plan only** unless the user explicitly asks to create the PR on GitHub.
+Default to planning only; don't open anything on GitHub unless that's explicitly requested.
 
 ---
 
-**Usage:**
+**Give it:**
 
 ```
 Issue: #<N>

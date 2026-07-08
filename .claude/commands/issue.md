@@ -1,10 +1,10 @@
-Read and follow **docs/workflows/issue.md** in full. Canonical workflow for all tools and teammates.
+Follow **docs/workflows/issue.md** start to finish — the full playbook lives there, not here.
 
-Default to **plan only** unless the user explicitly asks to create issues on GitHub.
+Default to planning only; don't create anything on GitHub unless that's explicitly requested.
 
 ---
 
-**Usage:**
+**Give it:**
 
 ```
 PRD: docs/prd-temp/YYYY-MM-DD-<slug>.md

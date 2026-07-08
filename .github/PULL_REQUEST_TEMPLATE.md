@@ -1,14 +1,13 @@
-<!-- PR title format: ✨ Enhancement: plain text description (no markdown bold **, no square brackets) -->
-<!-- Full PR workflow: docs/workflows/pr.md -->
+<!-- Title shape: 🚀 Feature: what it does, plain text (no ** bold, no [brackets]) -->
+<!-- Full playbook: docs/workflows/pr.md -->
 
-**✨ Enhancement**: <one or two sentence explanation in slack-like language, ultra terse>
+**🚀 Feature**: <one or two sentences, present tense, no fluff>
 
 <details>
-<summary>Description</summary>
+<summary>What changed</summary>
 
-<!-- Bullet list of what changed and why. One bullet per logical change.
-     Present tense, no hedging, brief and scannable.
-     Omit if the first line says enough. -->
+<!-- One bullet per logical change. Present tense, no hedging.
+     Skip this block entirely if the line above already says it all. -->
 
 </details>
 
@@ -16,12 +15,12 @@
 
 <details><summary>Diagram</summary>
 
-<!-- Mermaid or table when spatial structure helps reviewers; omit for trivial PRs -->
+<!-- Only if the change has spatial/structural shape worth drawing — Mermaid, top-down, ≤7 nodes. Otherwise delete this block. -->
 
 </details>
 
-<details><summary>File walkthrough</summary>
+<details><summary>Files touched</summary>
 
-<!-- - `path/to/file` — terse what changed -->
+<!-- - `path/to/file` — what changed, in a few words -->
 
 </details>

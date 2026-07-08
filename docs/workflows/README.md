@@ -1,9 +1,11 @@
-# Workflows
+# Planning Workflows
 
-| Workflow | Use when |
-| -------- | -------- |
-| [prd.md](./prd.md) | Writing or updating a product PRD |
-| [issue.md](./issue.md) | Creating a parent issue and sub-issues from an existing PRD |
-| [pr.md](./pr.md) | Opening a PR from the current branch for a GitHub issue |
+Three linked playbooks that take a feature from idea to shipped code. They're written for whoever's driving — a person typing directly, or an AI assistant acting on their behalf.
 
-These files are tool-agnostic—paste or `@`-reference them in any AI assistant.
+| Stage | File | Produces |
+| ----- | ---- | -------- |
+| 1. Define | [prd.md](./prd.md) | A dated PRD under `docs/prd-temp/` |
+| 2. Break down | [issue.md](./issue.md) | One epic + sized sub-issues on GitHub |
+| 3. Ship | [pr.md](./pr.md) | A pull request linked back to its issue |
+
+Nothing here is Claude-specific — hand any of these three files to another assistant (or read them yourself) and the steps still make sense. `@`-reference them, paste them, or point an agent at the path.

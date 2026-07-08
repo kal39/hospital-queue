@@ -1,263 +1,236 @@
-# Workflow: Issue (PRD → parent + sub-issues)
+# Playbook: Turning a PRD into GitHub Issues
 
-Create **one parent issue** that references the PRD, then **sub-issues** decomposed from the PRD with appropriate labels. Target repo: **LevCodeX/hospital-queue** (confirm with `gh repo view`).
+Takes an approved PRD and splits it into one tracking epic plus a set of right-sized sub-issues. Repo: **LevCodeX/hospital-queue** — double check with `gh repo view` before creating anything.
 
-**Input:** path to a PRD under `docs/prd-temp/` or `docs/prd/` (e.g. `docs/prd-temp/2026-07-08-sms-reminders.md`)
+**Needs:** a PRD path, e.g. `docs/prd-temp/2026-07-09-queue-sms-reminders.md`
 
-Prefer `docs/prd-temp/` for drafts created by the PRD workflow; `docs/prd/` holds the template plus approved/archived PRDs. This workflow is planning-only.
+This playbook only plans and (optionally) creates issues — it doesn't touch code.
 
 ---
 
-## How teammates run this
-
-**Any chat UI:** Attach or paste the PRD, plus this file, and:
+## Kicking one off
 
 ```text
 Follow docs/workflows/issue.md.
 
-PRD: docs/prd/YYYY-MM-DD-<slug>.md
+PRD: docs/prd-temp/<date>-<slug>.md
 Phase: P0
 Action: plan only | create issues
 ```
 
-**Cursor:** Invoke the `issue` skill.
+Defaults to **plan only**. Only create real GitHub issues when explicitly told to.
 
-**CLI (after plan is approved):** use the `gh issue create` commands the agent outputs, or ask the agent to run them with network permission.
-
----
-
-## Prerequisites
-
-- [ ] PRD exists and frontmatter `phase` is set
-- [ ] No **Open questions** rows with `open` (stop and resolve with author first)
-- [ ] `gh` authenticated (`gh auth status`) and default repo is `LevCodeX/hospital-queue`
-- [ ] User chose **plan only** or **create issues**
+Custom-command users: `/issue` (`.claude/commands/issue.md`) wraps this same playbook.
 
 ---
 
-## Step 1 — Parse PRD
+## Before starting
 
-Read the full PRD. Extract:
-
-| Source | Use for |
-| ------ | ------- |
-| Title (`# …`) | Parent issue title and theme |
-| `phase` in frontmatter | Only include requirements/stories for that phase unless user overrides |
-| `US-*` / `AC-*` | Sub-issue bodies and AC checklists |
-| `REQ-*` | Traceability; Must = required in this batch |
-| **Non-goals** / story "Out of scope" | Never create issues |
-| **Phases** table | Defer P1+ unless user asked |
+- [ ] The PRD's frontmatter has `phase` set
+- [ ] No `OPEN-###` row is still marked `open` — go resolve those with the PRD's owner first
+- [ ] `gh auth status` succeeds and the default repo is `LevCodeX/hospital-queue`
+- [ ] It's clear whether this run is a plan or an actual create
 
 ---
 
-## Step 2 — Decompose into parent + sub-issues
+## 1. Read the PRD end to end
 
-**Parent issue (exactly one)**
+Pull out:
 
-- Title: PRD title or `🚀 <Area>: <feature theme>` (emoji optional on parent)
-- Label: **`epic`**
-- Body: feature summary, phase, links to relevant `PROJECT.md` sections, and **PRD path** (see parent body template below)
-- Does **not** duplicate every AC; it tracks overall outcome and lists sub-issues after creation
-
-**Sub-issues (one or more)**
-
-- **Sizing:** each sub-issue ≈ 0.5–3 days for one engineer
-- **Prefer vertical slices** (shippable user outcome). Avoid layer-only tickets unless tiny
-- **Split** when multiple `US-*` deliver independently, AC sets span Frontend + Backend, or `REQ-NF-*` stands alone
-- **Do not** create sub-issues for **Non-goals**, out-of-scope lines, or open **Q-***
-
-**Sub-issue labels** (create in GitHub if missing; apply one primary type per issue):
-
-| Sub-issue role | Label |
-| -------------- | ----- |
-| User-story slice | `story` |
-| Engineering task (tests, migrations, config) | `task` |
-| Security / perf from `REQ-NF-*` | `task` (add `security` or `perf` if those labels exist) |
-
-**Area labels** — mirror the Trello board's categories, apply whichever apply: `backend`, `frontend`, `database`, `security`, `testing`, `devops`, `documentation`.
-
-**Dependencies:** note in sub-issue body (`Depends on #…`) or creation order; link blocked-by relationships only when the repo supports them.
+| From | Feeds into |
+| ---- | ---------- |
+| Title | The epic's title/theme |
+| `phase` | Filters which stories/requirements are in scope this round |
+| `STORY-*` / `CHECK-*` | Sub-issue bodies |
+| `FR-*` / `NFR-*` | Traceability — `Must` items are what actually gets built this batch |
+| Non-goals / any story's "out of scope" | Things to explicitly **not** create issues for |
+| Phases table | P1+ work stays out unless someone asks for it |
 
 ---
 
-## Step 3 — Plan (always, before create)
+## 2. Split it into an epic + sub-issues
 
-Output a table for user approval:
+**The epic (one, always)**
 
-| # | Role | Type | Title | Labels | US / REQ / AC | Depends |
-| - | ---- | ---- | ----- | ------ | ------------- | ------- |
-| 0 | Parent | Epic | … | `epic` | (all US/REQ in scope) | — |
-| 1 | Sub | 🚀 Feature | … | `story`, `backend` | US-001, REQ-F-001, AC-001–002 | — |
-| 2 | Sub | 🧪 Test | … | `task`, `backend` | AC-001 | 1 |
+- Title: the PRD's title, or `🚀 <area>: <theme>`
+- Label: `epic`
+- Body: summary + phase + a pointer to the relevant `PROJECT.md` sections + the PRD path
+- It tracks the overall outcome — it doesn't restate every acceptance check
 
-**Sub-issue title format:** `<emoji> <Area>: <imperative outcome>` (same types as [pr.md](./pr.md)):
+**Sub-issues (as many as make sense)**
 
-| Type | Emoji |
-| ---- | ----- |
+- Aim for roughly half a day to three days of work each
+- Favor a vertical slice a user would actually notice (e.g. "patient can cancel a booked appointment") over a horizontal one (e.g. "add cancel column to appointments table")
+- Split further when a story's checks span both frontend and backend, or when an `NFR-*` needs its own dedicated ticket
+- Never open a ticket for a non-goal, an out-of-scope line, or something still sitting in `OPEN-###`
+
+**Labels** — one type label per issue, plus whichever area labels apply:
+
+| Issue is about... | Type label |
+| ------------------ | ---------- |
+| A user-facing slice | `story` |
+| Plumbing (tests, config, migrations) | `task` |
+| An `NFR-*` around security or performance | `task` + `security`/`perf` if those labels exist |
+
+Area labels — same ones the Trello board uses, so the two stay in sync: `backend`, `frontend`, `database`, `security`, `testing`, `devops`, `documentation`.
+
+Note dependencies inline (`Depends on #…`) or just by creation order.
+
+---
+
+## 3. Show the plan before creating anything
+
+| # | Kind | Type | Title | Labels | Traces to | Depends on |
+| - | ---- | ---- | ----- | ------ | --------- | ---------- |
+| 0 | Epic | — | … | `epic` | (everything in scope) | — |
+| 1 | Sub-issue | 🚀 Feature | … | `story`, `backend` | STORY-001, FR-001, CHECK-001 | — |
+| 2 | Sub-issue | 🧪 Tests | … | `task`, `backend` | CHECK-001 | 1 |
+
+**Title shape:** `<emoji> <area>: <what it does, imperative>`
+
+| Kind of change | Emoji |
+| --------------- | ----- |
 | Feature | 🚀 |
-| Enhancement | ✨ |
-| Bug | 🦠 |
+| Improvement | ✨ |
+| Fix | 🐛 |
 | Refactor | ♻️ |
-| Test | 🧪 |
+| Tests | 🧪 |
 | Docs | 📝 |
-| Config | 🔧 |
-| Perf | ⚡ |
-| Security | 🔒 |
+| Chore/config | 🔧 |
+| Performance | ⚡ |
+| Security | 🔐 |
 | Cleanup | 🧹 |
 
-If **plan only**, stop here.
+Stop here if the run is **plan only**.
 
 ---
 
-## Step 4 — Issue bodies
+## 4. Write the bodies
 
-### Parent (epic) body
+### Epic
 
 ```markdown
-## Summary
-<one paragraph from PRD>
+## What this is
+<one paragraph from the PRD's summary>
 
-## PRD
-- **Path:** docs/prd/YYYY-MM-DD-<slug>.md
-- **Phase:** P0
+## Source PRD
+- Path: docs/prd-temp/<date>-<slug>.md
+- Phase: P0
 
-## Scope (this epic)
-**In**
-- …
+## Scope
+In: …
+Out: …
 
-**Out**
-- …
-
-## Engineering context
-- Relevant PROJECT.md sections: <e.g. "API Reference — Appointments", "Database Schema — queue_tickets">
+## Relevant docs
+- PROJECT.md sections: <e.g. "API Reference — Queue">
 
 ## Sub-issues
-<!-- Fill after creation -->
+<!-- filled in after creation -->
 - [ ] #TBD — …
 ```
 
-### Sub-issue body
-
-Use this body for every sub-issue (fill from PRD):
+### Each sub-issue
 
 ```markdown
-## Summary
+## What this is
 <one paragraph>
 
-## Traceability
-- PRD: docs/prd/YYYY-MM-DD-<slug>.md
-- Parent: #PARENT
-- User story: US-###
-- Requirements: REQ-F-###, REQ-NF-###
-- Acceptance: AC-###
+## Traces to
+- PRD: docs/prd-temp/<date>-<slug>.md
+- Epic: #EPIC
+- Story: STORY-###
+- Requirements: FR-###, NFR-###
+- Checks: CHECK-###
 
-## Acceptance criteria
-- [ ] AC-###: …
+## Acceptance checks
+- [ ] CHECK-###: …
 
 ## Scope
-**In**
-- …
-
-**Out**
-- …
+In: …
+Out: …
 
 ## Test plan
 - [ ] …
 
-## Definition of done
-- [ ] Acceptance criteria met
-- [ ] PR linked; CI green
+## Done means
+- [ ] Every acceptance check passes
+- [ ] PR is linked and CI is green
 ```
-
-Pull **In/Out** from PRD non-goals and story out-of-scope. Add **Test plan** from AC and `REQ-NF-*`.
 
 ---
 
-## Step 5 — Create on GitHub
+## 5. Create the issues
 
-Run only after the user approves the plan and asked to **create issues**.
+Only after the plan is approved and someone explicitly asked for real issues.
 
-### 5a — Parent epic
+**The epic:**
 
 ```bash
 gh issue create \
   --repo LevCodeX/hospital-queue \
-  --title "🚀 Area: feature theme" \
+  --title "🚀 area: theme" \
   --label "epic" \
   --body "$(cat <<'EOF'
-<paste parent body>
+<epic body>
 EOF
 )"
 ```
 
-Capture the parent issue number (`PARENT`).
+Note the epic's number — call it `EPIC` below.
 
-### 5b — Sub-issues
+**Each sub-issue:**
 
 ```bash
 gh issue create \
   --repo LevCodeX/hospital-queue \
-  --title "🚀 Area: outcome" \
+  --title "🚀 area: outcome" \
   --label "story" \
   --body "$(cat <<'EOF'
-<paste sub-issue body with Parent: #PARENT>
+<sub-issue body, referencing #EPIC>
 EOF
 )"
 ```
 
-Use `--label "task"` (and optional area labels) per the plan table.
+**Link sub-issues back to the epic** — try in this order:
 
-### 5c — Link sub-issues to parent
-
-Prefer native sub-issue linking (try in order):
-
-1. **`gh issue create --parent PARENT`** (when your `gh` version supports it)
-2. **GraphQL** (after all issues exist):
+1. `gh issue create --parent EPIC` if the installed `gh` version supports it
+2. GraphQL, once every issue exists:
 
 ```bash
-PARENT_ID=$(gh issue view "$PARENT" --repo LevCodeX/hospital-queue --json id -q .id)
+EPIC_ID=$(gh issue view "$EPIC" --repo LevCodeX/hospital-queue --json id -q .id)
 CHILD_ID=$(gh issue view "$CHILD" --repo LevCodeX/hospital-queue --json id -q .id)
 gh api graphql -H "GraphQL-Features: sub_issues" -f query='
-mutation($parent: ID!, $child: ID!) {
-  addSubIssue(input: { issueId: $parent, subIssueId: $child }) {
+mutation($epic: ID!, $child: ID!) {
+  addSubIssue(input: { issueId: $epic, subIssueId: $child }) {
     issue { number title }
     subIssue { number title }
   }
-}' -f parent="$PARENT_ID" -f child="$CHILD_ID"
+}' -f epic="$EPIC_ID" -f child="$CHILD_ID"
 ```
 
-3. **REST** (if GraphQL is unavailable): `POST /repos/{owner}/{repo}/issues/{parent_number}/sub_issues` with `sub_issue_id` set to the child issue's numeric REST `id` (from `gh api repos/LevCodeX/hospital-queue/issues/CHILD`).
+3. Plain REST if GraphQL sub-issues aren't available: `POST /repos/LevCodeX/hospital-queue/issues/{epic_number}/sub_issues` with the child's numeric `id`.
 
-Repeat linking for each sub-issue.
+Then edit the epic's body so the **Sub-issues** checklist lists every child by number and title.
 
-### 5d — Update parent checklist
-
-Edit the parent issue body so **Sub-issues** lists each child (`#NNN — title`).
-
-After creation, reply with:
-
-| Role | Issue | URL | Labels | Traces |
-| ---- | ----- | --- | ------ | ------ |
-| Parent | #PPP | … | epic | PRD path |
-| Sub | #NNN | … | story, backend | US-001, AC-001 |
+Reply with a table: kind, issue number, URL, labels, what it traces to.
 
 ---
 
-## Do not
+## Guardrails
 
-- Create issues for **Non-goals**, out-of-scope lines, or open **Q-***
-- Invent AC or requirements not in the PRD
-- Create multiple parent/epic issues for one PRD in a single run (one parent per PRD batch)
-- Use the PRD as implementation truth (point implementers to `PROJECT.md`)
+- Don't open issues for non-goals, out-of-scope lines, or anything still `OPEN-###`
+- Don't invent acceptance checks that aren't in the PRD
+- One epic per PRD per run — don't create a second epic for the same PRD later
+- Point implementers at `PROJECT.md`, not the PRD, once building starts
 
 ---
 
-## Checklist
+## Before you call it finished
 
-- [ ] Plan table shows one parent and N sub-issues; user approved (if creating)
-- [ ] Parent references PRD path and phase; label `epic` applied
-- [ ] Every sub-issue traces to `US-*` / `AC-*` / `REQ-*` and lists parent `#PARENT`
-- [ ] Sub-issues have appropriate `story` / `task` and area labels
-- [ ] Sub-issues linked to parent via GitHub sub-issues (or documented fallback)
-- [ ] Open questions were empty or explicitly waived by user
-- [ ] User has issue URLs and linked `PROJECT.md` sections for engineering handoff
+- [ ] Plan table showed one epic and N sub-issues, and was approved before anything was created
+- [ ] The epic links the PRD path, phase, and has the `epic` label
+- [ ] Every sub-issue traces to a story/requirement/check and lists the epic number
+- [ ] Sub-issues carry both a type label and the right area label(s)
+- [ ] Sub-issues are actually linked to the epic (native linking, or the documented fallback)
+- [ ] No unresolved open questions were silently skipped
+- [ ] The requester has issue URLs and knows which `PROJECT.md` sections to read
