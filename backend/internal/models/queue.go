@@ -22,8 +22,8 @@ const (
 type QueueTicket struct {
 	ID            uuid.UUID   `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	AppointmentID uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex"                  json:"appointmentId"`
-	DoctorID      uuid.UUID   `gorm:"type:uuid;not null;index"                       json:"doctorId"`
-	QueueDate     time.Time   `gorm:"type:date;not null;index"                       json:"queueDate"`
+	DoctorID      uuid.UUID   `gorm:"type:uuid;not null;index:idx_queue_tickets_doctor_date" json:"doctorId"`
+	QueueDate     time.Time   `gorm:"type:date;not null;index:idx_queue_tickets_doctor_date" json:"queueDate"`
 	Number        int         `gorm:"not null"                                       json:"number"`
 	Status        QueueStatus `gorm:"not null;size:20;index"                         json:"status"`
 	CalledAt      *time.Time  `                                                      json:"calledAt,omitempty"`

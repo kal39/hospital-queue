@@ -1,0 +1,385 @@
+openapi: 3.0.0
+info:
+  title: HospitalQueue Clinical API
+  description: Always-current, interactive API reference for the HospitalQueue Clinical Management System, covering patient booking, reception check-ins, live queue progression, and pharmacy dispensing station.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Development Server
+
+paths:
+  # ================= AUTHENTICATION ENDPOINTS =================
+  /auth/register:
+    post:
+      summary: Register a new patient
+      description: Creates a user record and a linked patient record.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - firstName
+                - lastName
+                - password
+                - gender
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                password:
+                  type: string
+                  minLength: 6
+                gender:
+                  type: string
+                  enum: [M, F, Other]
+                address:
+                  type: string
+                emergencyContact:
+                  type: string
+      responses:
+        '200':
+          description: Patient registered successfully. Returns user profile and access/refresh JWT tokens.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          description: Email or Phone is already registered.
+
+  /auth/login:
+    post:
+      summary: User Login (Staff & Patients)
+      description: Authenticates a user by email or phone number.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - identifier
+                - password
+              properties:
+                identifier:
+                  type: string
+                  description: Email or phone number.
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid email/phone or password.
+
+  /auth/refresh:
+    post:
+      summary: Rotate expired JWT Tokens
+      description: Validates a refresh token and returns a new Access/Refresh token pair.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Tokens rotated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+
+  /auth/me:
+    get:
+      summary: Get active user profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile resolved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserResponse'
+
+  # ================= PATIENT PORTAL ENDPOINTS =================
+  /patients/me/appointments:
+    post:
+      summary: Book an appointment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - doctorId
+                - scheduledAt
+              properties:
+                doctorId:
+                  type: string
+                  format: uuid
+                scheduledAt:
+                  type: string
+                  format: date-time
+                durationMinutes:
+                  type: integer
+                  default: 15
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Appointment booked successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Appointment'
+        '409':
+          description: Overlap conflict. Doctor is busy.
+
+  # ================= DOCTORS & SCHEDULES ENDPOINTS =================
+  /doctors:
+    get:
+      summary: List all doctors
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of doctors retrieved successfully.
+
+  /doctors/{id}/slots:
+    get:
+      summary: List open slots for a doctor on a given day
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Available slots retrieved.
+
+  # ================= QUEUE MANAGEMENT ENDPOINTS =================
+  /queue/doctor/{doctorId}/call-next:
+    post:
+      summary: Advance the live queue and call the next patient
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: doctorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Next patient called. Returns the active queue ticket.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/QueueTicket'
+
+  # ================= PHARMACY ENDPOINTS =================
+  /pharmacy/medications:
+    get:
+      summary: List stock medications (Pharmacists / Admins)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Inventory fetched.
+    post:
+      summary: Add a new medication to stock inventory
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - unit
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                unit:
+                  type: string
+                stockQty:
+                  type: integer
+                  default: 0
+                reorderLevel:
+                  type: integer
+                  default: 10
+      responses:
+        '200':
+          description: Medication added.
+
+  /pharmacy/prescriptions/{id}/dispense:
+    post:
+      summary: Dispense a prescription and deduct inventory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Prescription dispensed successfully and stock adjusted.
+
+  # ================= ADMIN DASHBOARD ENDPOINTS =================
+  /admin/dashboard:
+    get:
+      summary: Get central command analytics metrics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Admin dashboard metrics retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      doctorCount:
+                        type: integer
+                      patientCount:
+                        type: integer
+                      appointmentsToday:
+                        type: integer
+                      lowStockMedications:
+                        type: integer
+                      pendingPrescriptions:
+                        type: integer
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TokenPair:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        phone:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserResponse'
+        tokens:
+          $ref: '#/components/schemas/TokenPair'
+
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        doctorId:
+          type: string
+          format: uuid
+        scheduledAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+        status:
+          type: string
+        reason:
+          type: string
+
+    QueueTicket:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+        doctorId:
+          type: string
+          format: uuid
+        queueDate:
+          type: string
+          format: date
+        number:
+          type: integer
+        status:
+          type: string

@@ -1,0 +1,10 @@
+-- db/migrations/000001_initial_schema.down.sql
+
+DROP TABLE IF EXISTS prescription_items CASCADE;
+DROP TABLE IF EXISTS prescriptions CASCADE;
+DROP TABLE IF EXISTS medications CASCADE;
+DROP TABLE IF EXISTS queue_tickets CASCADE;
+DROP TABLE IF EXISTS appointments CASCADE;
+DROP TABLE IF EXISTS patients CASCADE;
+DROP TABLE IF EXISTS doctors CASCADE;
+DROP TABLE IF EXISTS users CASCADE;

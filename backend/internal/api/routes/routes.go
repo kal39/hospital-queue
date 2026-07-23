@@ -35,7 +35,7 @@ func Register(app *fiber.App, h *Handlers, jwtManager *jwt.Manager) {
 	auth := api.Group("/auth")
 
 	staffOnly := string(models.RoleAdmin)
-	frontDesk := middleware.RequireRole(string(models.RoleAdmin), string(models.RoleReceptionist))
+	//frontDesk := middleware.RequireRole(string(models.RoleAdmin), string(models.RoleReceptionist))
 	clinicalStaff := middleware.RequireRole(string(models.RoleAdmin), string(models.RoleDoctor), string(models.RoleReceptionist))
 	pharmacyStaff := middleware.RequireRole(string(models.RoleAdmin), string(models.RolePharmacist))
 	adminOnly := middleware.RequireRole(staffOnly)
@@ -57,7 +57,7 @@ func Register(app *fiber.App, h *Handlers, jwtManager *jwt.Manager) {
 	patientPortal.Get("/appointments", h.Appointment.MyAppointments)
 
 	// Patient records — front desk / clinical staff lookups.
-	patients := protected.Group("/patients", frontDesk)
+	patients := protected.Group("/patients", clinicalStaff)
 	patients.Get("/", h.Patient.List)
 	patients.Get("/:id", h.Patient.Get)
 

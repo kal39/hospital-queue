@@ -22,8 +22,8 @@ const (
 type Appointment struct {
 	ID              uuid.UUID         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	PatientID       uuid.UUID         `gorm:"type:uuid;not null;index"                       json:"patientId"`
-	DoctorID        uuid.UUID         `gorm:"type:uuid;not null;index"                       json:"doctorId"`
-	ScheduledAt     time.Time         `gorm:"not null;index"                                 json:"scheduledAt"`
+	DoctorID        uuid.UUID         `gorm:"type:uuid;not null;index:idx_appointments_doctor_schedule" json:"doctorId"`
+	ScheduledAt     time.Time         `gorm:"not null;index:idx_appointments_doctor_schedule" json:"scheduledAt"`
 	DurationMinutes int               `gorm:"not null;default:15"                            json:"durationMinutes"`
 	Status          AppointmentStatus `gorm:"not null;size:20;index"                         json:"status"`
 	Reason          string            `gorm:"size:255"                                       json:"reason,omitempty"`
