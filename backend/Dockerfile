@@ -4,12 +4,14 @@ WORKDIR /app
 
 RUN apk add --no-cache git
 
-COPY go.mod go.sum ./
-RUN go mod download
-
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./cmd/server
+# Dynamically locate and build cmd/server regardless of context
+RUN if [ -d "./cmd/server" ]; then \
+        CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./cmd/server; \
+    else \
+        CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./backend/cmd/server; \
+    fi
 
 FROM alpine:3.19
 
