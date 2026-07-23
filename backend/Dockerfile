@@ -6,12 +6,8 @@ RUN apk add --no-cache git
 
 COPY . .
 
-# Dynamically locate and build cmd/server regardless of context
-RUN if [ -d "./cmd/server" ]; then \
-        CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./cmd/server; \
-    else \
-        CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./backend/cmd/server; \
-    fi
+# Automatically locate main.go anywhere in the directory tree and build it
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server $(find . -name "main.go" -exec dirname {} \; | head -n 1)
 
 FROM alpine:3.19
 
