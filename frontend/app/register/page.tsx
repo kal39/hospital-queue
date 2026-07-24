@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { registerPatient, loginUser } from "@/lib/api/auth";
 import { useAuthStore } from "@/store/auth-store";
-import { User, Mail, Phone, Lock, ArrowRight, ShieldCheck, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Mail, Phone, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -58,7 +58,9 @@ export default function RegisterPage() {
       }
 
       setAuth(loginRes.user, loginRes.tokens.accessToken);
-      router.push("/appointments");
+
+      // Redirect directly to Reception
+      router.push("/reception");
 
     } catch (err: any) {
       // Friendly error message parser for Go validation 422 responses
@@ -197,7 +199,7 @@ export default function RegisterPage() {
               disabled={loading}
               className="w-full bg-[#004197] hover:bg-[#00347a] text-white py-3 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-500/10 mt-4 disabled:opacity-50"
             >
-              {loading ? "Registering & Logging in..." : "Create Account & Go to Dashboard"}
+              {loading ? "Registering..." : "Create Account & Go to Reception"}
               <ArrowRight size={16} />
             </button>
           </form>
