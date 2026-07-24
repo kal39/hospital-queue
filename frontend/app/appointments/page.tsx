@@ -22,6 +22,18 @@ import {
   Plus
 } from "lucide-react";
 
+// Local Doctor interface definition to prevent Next.js build type errors
+interface Doctor {
+  id: string;
+  specialty?: string;
+  bio?: string;
+  rating?: string | number;
+  user?: {
+    firstName?: string;
+    lastName?: string;
+  };
+}
+
 const DATE_SLOTS = [
   { day: "MON", date: "23" },
   { day: "TUE", date: "24" },
@@ -42,7 +54,7 @@ export default function BookAppointmentPage() {
   const [reason, setReason] = useState("");
 
   // 1. Fetch live doctors from database
-  const { data: doctors = [], isLoading: loadingDoctors } = useQuery({
+  const { data: doctors = [], isLoading: loadingDoctors } = useQuery<Doctor[]>({
     queryKey: ["doctors"],
     queryFn: fetchDoctors,
   });
@@ -156,7 +168,7 @@ export default function BookAppointmentPage() {
                 <div className="text-xs text-gray-400 font-semibold py-4">Loading active doctors...</div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {doctors.map((doc) => (
+                  {doctors.map((doc: Doctor) => (
                     <button
                       key={doc.id}
                       onClick={() => {
@@ -250,7 +262,7 @@ export default function BookAppointmentPage() {
                 <div className="text-xs text-gray-400 font-semibold py-4">Checking slots...</div>
               ) : slots.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {slots.map((slot) => {
+                  {slots.map((slot: string) => {
                     const isSelected = selectedTime === slot;
                     return (
                       <button
@@ -309,7 +321,7 @@ export default function BookAppointmentPage() {
             <div className="text-xs text-gray-400 py-4 font-semibold">Loading appointments...</div>
           ) : appointments.length > 0 ? (
             <div className="flex flex-col gap-4">
-              {appointments.map((appt) => {
+              {appointments.map((appt: any) => {
                 const isUpcoming = appt.status === "SCHEDULED" || appt.status === "CONFIRMED";
                 const dateObj = new Date(appt.date);
                 const day = dateObj.getDate();
