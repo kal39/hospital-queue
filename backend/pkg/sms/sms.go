@@ -1,47 +1,79 @@
+// backend/pkg/sms/sms.go
 package sms
 
 import (
-	"strconv"
-
-	"github.com/rs/zerolog/log"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
 )
 
-// Sender abstracts an SMS provider (Twilio, Africa's Talking, etc).
-// The zero value logs messages to the console instead of sending them,
-// which is enough for local dev — wire a real provider in New() once
-// credentials exist.
-type Sender struct {
+// Sender interface defines the contract for sending SMS notifications
+type Sender interface {
+	SendSMS(to string, message string) error
+}
+
+type client struct {
 	accountSID string
 	authToken  string
 	fromNumber string
-	enabled    bool
+	httpClient *http.Client
 }
 
-func New(accountSID, authToken, fromNumber string) *Sender {
-	return &Sender{
-		accountSID: accountSID,
-		authToken:  authToken,
-		fromNumber: fromNumber,
-		enabled:    accountSID != "" && authToken != "",
+// New creates a new SMS Sender instance configured with Twilio credentials
+func New(accountSID, authToken, fromNumber string) Sender {
+	return &client{
+		accountSID: strings.TrimSpace(accountSID),
+		authToken:  strings.TrimSpace(authToken),
+		fromNumber: strings.TrimSpace(fromNumber),
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
 }
 
-func (s *Sender) SendAppointmentReminder(toPhone, patientName, doctorName, whenText string) error {
-	body := "Hi " + patientName + ", reminder: appointment with " + doctorName + " on " + whenText + "."
-	return s.send(toPhone, body)
-}
-
-func (s *Sender) SendQueueCalledNotice(toPhone string, queueNumber int) error {
-	body := "You're being called now — queue number " + strconv.Itoa(queueNumber) + ". Please proceed to the doctor's room."
-	return s.send(toPhone, body)
-}
-
-func (s *Sender) send(toPhone, body string) error {
-	if !s.enabled {
-		log.Info().Str("to", toPhone).Str("body", body).Msg("[dev] SMS (provider not configured)")
+// SendSMS delivers an SMS message using Twilio or falls back to standard log output if credentials are unset
+func (s *client) SendSMS(to string, message string) error {
+	// Fallback for local development/staging when Twilio credentials are not provided
+	if s.accountSID == "" || s.authToken == "" || s.fromNumber == "" {
+		log.Printf("[SMS MOCK LOG] To: %s | Message: %s\n", to, message)
 		return nil
 	}
-	// TODO: call the real provider's API (e.g. Twilio REST API) here.
-	log.Info().Str("to", toPhone).Str("body", body).Msg("SMS sent")
+
+	// Construct Twilio API Endpoint
+	endpoint := fmt.Sprintf("https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json", s.accountSID)
+
+	// Prepare URL Form-encoded request body
+	formData := url.Values{}
+	formData.Set("To", to)
+	formData.Set("From", s.fromNumber)
+	formData.Set("Body", message)
+
+	req, err := http.NewRequest("POST", endpoint, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to construct twilio sms request: %w", err)
+	}
+
+	// Configure HTTP Basic Auth and Headers
+	req.SetBasicAuth(s.accountSID, s.authToken)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	// Execute HTTP request to Twilio API
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request to twilio API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("twilio SMS API rejected request (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	log.Printf("[SMS DELIVERED] Twilio SMS successfully sent to %s", to)
 	return nil
 }
