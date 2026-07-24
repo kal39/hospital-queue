@@ -42,10 +42,9 @@ export default function SignInPage() {
         router.push("/admin");
       } else if (role === "DOCTOR") {
         router.push("/live-queue");
-      } else if (role === "RECEPTIONIST") {
-        router.push("/reception");
       } else {
-        router.push("/appointments"); // Patients
+        // Redirect directly to Reception Page
+        router.push("/reception"); 
       }
     } catch (err: any) {
       // Unpack Axios error messages cleanly
