@@ -7,7 +7,7 @@ RUN apk add --no-cache git
 COPY . .
 
 # Automatically locate main.go anywhere in the directory tree and build it
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server $(find . -type d -name "server" | head -n 1)
 FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates tzdata
