@@ -37,7 +37,7 @@ export default function SignInPage() {
       setAuth(response.user, response.tokens.accessToken);
 
       // Route users dynamically based on their roles
-      const role = response.user.role;
+     const role = response.user.role as any;
       if (role === "ADMIN") {
         router.push("/admin");
       } else if (role === "DOCTOR") {
