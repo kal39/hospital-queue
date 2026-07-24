@@ -36,20 +36,29 @@ export default function SignInPage() {
       // Store auth state globally in Zustand
       setAuth(response.user, response.tokens.accessToken);
 
-      // Route users dynamically based on their roles
-     const role = response.user.role as any;
+      // Normalize role to UPPERCASE string for safe comparison (handles "admin", "ADMIN", "patient", etc.)
+      const role = String(response.user?.role || "").toUpperCase();
+
       if (role === "ADMIN") {
         router.push("/admin");
       } else if (role === "DOCTOR") {
         router.push("/live-queue");
       } else if (role === "RECEPTIONIST") {
         router.push("/reception");
+      } else if (role === "PHARMACIST") {
+        router.push("/pharmacy");
       } else {
-        router.push("/appointments"); // Patients
+        router.push("/appointments"); // Default route for PATIENT
       }
     } catch (err: any) {
       // Unpack Axios error messages cleanly
-      const msg = err.response?.data?.message || err.message || "Invalid credentials. Please try again.";
+      const msg = 
+        err.response?.data?.message || 
+        err.response?.data?.error || 
+        (typeof err.response?.data === "string" ? err.response.data : null) ||
+        err.message || 
+        "Invalid credentials. Please try again.";
+      
       setError(msg);
     } finally {
       setLoading(false);
