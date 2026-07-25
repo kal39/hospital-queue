@@ -70,7 +70,19 @@ func (s *Sender) Send(to string, message string) error {
 	return nil
 }
 
-// SendSMS is an alias method to support alternative method calls
+// SendSMS alias method
 func (s *Sender) SendSMS(to string, message string) error {
 	return s.Send(to, message)
+}
+
+// SendAppointmentReminder formats and dispatches appointment reminders (4 string parameters)
+func (s *Sender) SendAppointmentReminder(to, arg1, arg2, arg3 string) error {
+	msg := fmt.Sprintf("HospitalQueue Reminder: %s, your appointment is scheduled at %s with Dr. %s.", arg1, arg2, arg3)
+	return s.Send(to, msg)
+}
+
+// SendQueueCalledNotice formats and dispatches live queue alerts (accepts phone string and ticket integer)
+func (s *Sender) SendQueueCalledNotice(to string, ticketNumber int) error {
+	msg := fmt.Sprintf("HospitalQueue Alert: Ticket #%d is now being called! Please proceed to the desk.", ticketNumber)
+	return s.Send(to, msg)
 }
