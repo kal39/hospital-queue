@@ -6,10 +6,10 @@ import (
 	"log"
 	"strings"
 
-	"hospital-queue/internal/config"
 	"hospital-queue/internal/api/handlers"
 	"hospital-queue/internal/api/routes"
-	"hospital-queue/internal/database" // Import our new database package
+	"hospital-queue/internal/config"
+	"hospital-queue/internal/database"
 	"hospital-queue/internal/repository"
 	"hospital-queue/internal/services"
 	"hospital-queue/pkg/jwt"
@@ -32,7 +32,6 @@ func main() {
 
 	// 2. Run Versioned SQL Migrations (Production-Safe)
 	fmt.Println("Running versioned database migrations...")
-	// Convert GORM connection string to postgresql:// format expected by golang-migrate
 	pgURL := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		cfg.DB.User, cfg.DB.Password, cfg.DB.Host, cfg.DB.Port, cfg.DB.Name, cfg.DB.SSLMode,
@@ -108,11 +107,26 @@ func main() {
 	// 8. Initialize Fiber Web App
 	app := fiber.New()
 
-	// Enable CORS using origins joined into a clean string
+	// Enforce HSTS (HTTP Strict Transport Security) and Security Headers
+	app.Use(func(c *fiber.Ctx) error {
+		c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("X-Frame-Options", "DENY")
+		c.Set("X-XSS-Protection", "1; mode=block")
+		return c.Next()
+	})
+
+	// Safely clean CORS origins to prevent Fiber panic when AllowCredentials is true
+	corsOrigins := strings.Join(cfg.CORS.Origins, ",")
+	if corsOrigins == "" || corsOrigins == "*" {
+		corsOrigins = "http://localhost:3000,http://localhost:5173,https://hospital-queue-1yd1.onrender.com,https://hospital-queue-frontend-a6wc.onrender.com"
+	}
+
+	// Enable CORS
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     strings.Join(cfg.CORS.Origins, ","),
+		AllowOrigins:     corsOrigins,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
-		AllowMethods:     "GET, POST, PUT, DELETE",
+		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
 		AllowCredentials: true,
 	}))
 
