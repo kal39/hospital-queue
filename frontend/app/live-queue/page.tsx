@@ -4,7 +4,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "@/lib/api/axios";
+import axios from "axios";
 import { useAuthStore } from "@/store/auth-store";
 import { 
   Stethoscope, 
