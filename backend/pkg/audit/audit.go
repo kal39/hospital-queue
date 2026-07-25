@@ -1,132 +1,53 @@
-// pkg/mailer/mailer.go
-package mailer
+package audit
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
 	"log"
-	"net/http"
-	"net/smtp"
-	"strings"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
 )
 
-// Mailer manages transactional email delivery via API and SMTP fallback
-type Mailer struct {
-	Host       string
-	Port       int
-	Username   string
-	Password   string
-	From       string
-	httpClient *http.Client
+// LogEntry defines a HIPAA-compliant medical record access log entry
+type LogEntry struct {
+	Timestamp       string `json:"timestamp"`
+	Action          string `json:"action"`
+	ActorID         string `json:"actor_id"`
+	ActorRole       string `json:"actor_role"`
+	TargetPatientID string `json:"target_patient_id,omitempty"`
+	ResourcePath    string `json:"resource_path"`
+	IPAddress       string `json:"ip_address"`
+	UserAgent       string `json:"user_agent"`
 }
 
-// ResendEmailRequest defines the JSON payload for transactional email APIs
-type ResendEmailRequest struct {
-	From    string   `json:"from"`
-	To      []string `json:"to"`
-	Subject string   `json:"subject"`
-	HTML    string   `json:"html"`
-}
+// LogPatientAccess records structured audit logs whenever patient health records are viewed
+func LogPatientAccess(c *fiber.Ctx, action, targetPatientID string) {
+	userID := c.Locals("userID")
+	userRole := c.Locals("userRole")
 
-// New initializes a new Mailer instance
-func New(host string, port int, username, password, from string) *Mailer {
-	return &Mailer{
-		Host:     strings.TrimSpace(host),
-		Port:     port,
-		Username: strings.TrimSpace(username),
-		Password: strings.TrimSpace(password),
-		From:     strings.TrimSpace(from),
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-	}
-}
-
-// Send dispatches an email using Transactional API (Resend/Postmark), with local mock fallback
-func (m *Mailer) Send(to, subject, htmlBody string) error {
-	// 1. Transactional API Mode (Resend API key starts with "re_" or Host contains "resend")
-	if strings.HasPrefix(m.Password, "re_") || strings.Contains(strings.ToLower(m.Host), "resend") {
-		return m.sendViaTransactionalAPI(to, subject, htmlBody)
+	actorIDStr := ""
+	if userID != nil {
+		actorIDStr = userID.(string)
 	}
 
-	// 2. Dev Mock Fallback (If no credentials provided in local environment)
-	if m.Host == "" || m.Password == "" {
-		log.Printf("[MAILER DEV MOCK] To: %s | Subject: %s | Body length: %d bytes", to, subject, len(htmlBody))
-		return nil
+	actorRoleStr := ""
+	if userRole != nil {
+		actorRoleStr = userRole.(string)
 	}
 
-	// 3. Raw SMTP Fallback (for local SMTP servers / Mailtrap)
-	auth := smtp.PlainAuth("", m.Username, m.Password, m.Host)
-	addr := fmt.Sprintf("%s:%d", m.Host, m.Port)
-
-	msg := []byte(fmt.Sprintf("From: %s\r\n"+
-		"To: %s\r\n"+
-		"Subject: %s\r\n"+
-		"MIME-Version: 1.0\r\n"+
-		"Content-Type: text/html; charset=UTF-8\r\n\r\n%s", m.From, to, subject, htmlBody))
-
-	err := smtp.SendMail(addr, auth, m.From, []string{to}, msg)
-	if err != nil {
-		return fmt.Errorf("failed to send SMTP email: %w", err)
+	entry := LogEntry{
+		Timestamp:       time.Now().UTC().Format(time.RFC3339),
+		Action:          action,
+		ActorID:         actorIDStr,
+		ActorRole:       actorRoleStr,
+		TargetPatientID: targetPatientID,
+		ResourcePath:    c.Path(),
+		IPAddress:       c.IP(),
+		UserAgent:       c.Get("User-Agent"),
 	}
 
-	log.Printf("[MAILER SMTP SUCCESS] Email sent to %s via SMTP", to)
-	return nil
-}
-
-// sendViaTransactionalAPI dispatches emails via HTTPS API to prevent spam flags in production
-func (m *Mailer) sendViaTransactionalAPI(to, subject, htmlBody string) error {
-	fromAddress := m.From
-	if fromAddress == "" {
-		fromAddress = "HospitalQueue <onboarding@resend.dev>"
+	jsonLog, err := json.Marshal(entry)
+	if err == nil {
+		log.Printf("[PHI ACCESS AUDIT LOG] %s", string(jsonLog))
 	}
-
-	payload := ResendEmailRequest{
-		From:    fromAddress,
-		To:      []string{to},
-		Subject: subject,
-		HTML:    htmlBody,
-	}
-
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal transactional email JSON: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return fmt.Errorf("failed to create transactional mail request: %w", err)
-	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", m.Password))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := m.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to dispatch email via Transactional API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var errResp map[string]interface{}
-		_ = json.NewDecoder(resp.Body).Decode(&errResp)
-		return fmt.Errorf("transactional API returned status %d: %v", resp.StatusCode, errResp)
-	}
-
-	log.Printf("[MAILER TRANSACTIONAL SUCCESS] Email dispatched to %s via Transactional API", to)
-	return nil
-}
-
-// SendEmail alias method for backwards compatibility
-func (m *Mailer) SendEmail(to, subject, htmlBody string) error {
-	return m.Send(to, subject, htmlBody)
-}
-
-// SendAppointmentReminder formats and sends an appointment reminder email
-func (m *Mailer) SendAppointmentReminder(to, timeStr, doctorName string) error {
-	subject := "Appointment Reminder - HospitalQueue"
-	htmlBody := fmt.Sprintf("<h2>Appointment Reminder</h2><p>You have an upcoming appointment with Dr. <strong>%s</strong> scheduled for <strong>%s</strong>.</p>", doctorName, timeStr)
-	return m.Send(to, subject, htmlBody)
 }
