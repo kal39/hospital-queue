@@ -124,10 +124,9 @@ func (m *Mailer) SendEmail(to, subject, htmlBody string) error {
 	return m.Send(to, subject, htmlBody)
 }
 
-// SendAppointmentReminder formats and sends an appointment reminder email (flexible variadic parameters)
-func (m *Mailer) SendAppointmentReminder(to string, args ...string) error {
+// SendAppointmentReminder formats and sends an appointment reminder email
+func (m *Mailer) SendAppointmentReminder(to, timeStr, doctorName string) error {
 	subject := "Appointment Reminder - HospitalQueue"
-	detailStr := strings.Join(args, " ")
-	htmlBody := fmt.Sprintf("<h2>Appointment Reminder</h2><p>You have an upcoming appointment reminder: <strong>%s</strong></p>", detailStr)
+	htmlBody := fmt.Sprintf("<h2>Appointment Reminder</h2><p>You have an upcoming appointment with Dr. <strong>%s</strong> scheduled for <strong>%s</strong>.</p>", doctorName, timeStr)
 	return m.Send(to, subject, htmlBody)
 }
