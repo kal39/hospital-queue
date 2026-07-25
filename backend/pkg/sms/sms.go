@@ -1,9 +1,9 @@
-// backend/pkg/sms/sms.go
+// pkg/sms/sms.go
 package sms
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -11,69 +11,66 @@ import (
 	"time"
 )
 
-// Sender interface defines the contract for sending SMS notifications
-type Sender interface {
-	SendSMS(to string, message string) error
-}
-
-type client struct {
-	accountSID string
-	authToken  string
-	fromNumber string
+// Sender handles sending SMS messages via Twilio
+type Sender struct {
+	AccountSID string
+	AuthToken  string
+	FromNumber string
 	httpClient *http.Client
 }
 
-// New creates a new SMS Sender instance configured with Twilio credentials
-func New(accountSID, authToken, fromNumber string) Sender {
-	return &client{
-		accountSID: strings.TrimSpace(accountSID),
-		authToken:  strings.TrimSpace(authToken),
-		fromNumber: strings.TrimSpace(fromNumber),
+// New creates a new SMS Sender instance
+func New(accountSID, authToken, fromNumber string) *Sender {
+	return &Sender{
+		AccountSID: strings.TrimSpace(accountSID),
+		AuthToken:  strings.TrimSpace(authToken),
+		FromNumber: strings.TrimSpace(fromNumber),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
 }
 
-// SendSMS delivers an SMS message using Twilio or falls back to standard log output if credentials are unset
-func (s *client) SendSMS(to string, message string) error {
-	// Fallback for local development/staging when Twilio credentials are not provided
-	if s.accountSID == "" || s.authToken == "" || s.fromNumber == "" {
-		log.Printf("[SMS MOCK LOG] To: %s | Message: %s\n", to, message)
+// Send dispatches an SMS message using Twilio REST API
+func (s *Sender) Send(to string, message string) error {
+	// Fallback mock mode when credentials are missing
+	if s.AccountSID == "" || s.AuthToken == "" || s.FromNumber == "" {
+		log.Printf("[SMS DEV MOCK] To: %s | Message: %s", to, message)
 		return nil
 	}
 
-	// Construct Twilio API Endpoint
-	endpoint := fmt.Sprintf("https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json", s.accountSID)
+	apiURL := fmt.Sprintf("https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json", s.AccountSID)
 
-	// Prepare URL Form-encoded request body
-	formData := url.Values{}
-	formData.Set("To", to)
-	formData.Set("From", s.fromNumber)
-	formData.Set("Body", message)
+	data := url.Values{}
+	data.Set("To", to)
+	data.Set("From", s.FromNumber)
+	data.Set("Body", message)
 
-	req, err := http.NewRequest("POST", endpoint, strings.NewReader(formData.Encode()))
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to construct twilio sms request: %w", err)
+		return fmt.Errorf("failed to create Twilio request: %w", err)
 	}
 
-	// Configure HTTP Basic Auth and Headers
-	req.SetBasicAuth(s.accountSID, s.authToken)
+	req.SetBasicAuth(s.AccountSID, s.AuthToken)
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	// Execute HTTP request to Twilio API
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request to twilio API: %w", err)
+		return fmt.Errorf("failed to send SMS via Twilio: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Check response status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("twilio SMS API rejected request (status %d): %s", resp.StatusCode, string(bodyBytes))
+		var twilioError map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&twilioError)
+		return fmt.Errorf("twilio API error (status %d): %v", resp.StatusCode, twilioError)
 	}
 
-	log.Printf("[SMS DELIVERED] Twilio SMS successfully sent to %s", to)
+	log.Printf("[SMS SUCCESS] Message dispatched to %s via Twilio", to)
 	return nil
+}
+
+// SendSMS is an alias method to support alternative method calls
+func (s *Sender) SendSMS(to string, message string) error {
+	return s.Send(to, message)
 }
