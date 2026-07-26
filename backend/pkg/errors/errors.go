@@ -1,41 +1,32 @@
+// pkg/errors/errors.go
 package errors
 
-import "errors"
+import "github.com/gofiber/fiber/v2"
 
-var (
-	ErrNotFound           = errors.New("resource not found")
-	ErrUnauthorized       = errors.New("unauthorized")
-	ErrForbidden          = errors.New("forbidden")
-	ErrConflict           = errors.New("resource already exists")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrTokenExpired       = errors.New("token has expired")
-	ErrTokenInvalid       = errors.New("token is invalid")
-	ErrInvalidInput       = errors.New("invalid input")
-	ErrInternalServer     = errors.New("internal server error")
-	ErrValidation         = errors.New("validation error")
+// Machine-readable standardized error codes
+const (
+	ErrInvalidCredentials  = "INVALID_CREDENTIALS"
+	ErrUnauthorized        = "UNAUTHORIZED_ACCESS"
+	ErrForbidden           = "FORBIDDEN_RESOURCE"
+	ErrAppointmentConflict = "APPOINTMENT_CONFLICT"
+	ErrValidationFailed    = "VALIDATION_FAILED"
+	ErrNotFound            = "RESOURCE_NOT_FOUND"
+	ErrRateLimitExceeded   = "RATE_LIMIT_EXCEEDED"
+	ErrInternalError       = "INTERNAL_SERVER_ERROR"
 )
 
-type AppError struct {
-	Code    int
-	Message string
-	Err     error
+// ErrorResponse defines the structured JSON response envelope
+type ErrorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Status  int    `json:"status"`
 }
 
-func (e *AppError) Error() string {
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return e.Message
-}
-
-func (e *AppError) Unwrap() error {
-	return e.Err
-}
-
-func New(code int, message string, err error) *AppError {
-	return &AppError{Code: code, Message: message, Err: err}
-}
-
-func Is(err, target error) bool {
-	return errors.Is(err, target)
+// SendError formats and dispatches a machine-readable error response
+func SendError(c *fiber.Ctx, status int, code, message string) error {
+	return c.Status(status).JSON(ErrorResponse{
+		Code:    code,
+		Message: message,
+		Status:  status,
+	})
 }
