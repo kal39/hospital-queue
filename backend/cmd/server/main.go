@@ -4,12 +4,15 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
+	"time"
 
 	"hospital-queue/internal/api/handlers"
 	"hospital-queue/internal/api/routes"
 	"hospital-queue/internal/config"
 	"hospital-queue/internal/database"
+	"hospital-queue/internal/jobs"
 	"hospital-queue/internal/repository"
 	"hospital-queue/internal/services"
 	"hospital-queue/pkg/jwt"
@@ -17,6 +20,7 @@ import (
 	"hospital-queue/pkg/sms"
 	"hospital-queue/pkg/validator"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"gorm.io/driver/postgres"
@@ -30,7 +34,23 @@ func main() {
 		log.Fatalf("failed to load configuration: %v", err)
 	}
 
-	// 2. Run Versioned SQL Migrations (Production-Safe)
+	// 2. Initialize Sentry Exception Tracking
+	sentryDSN := os.Getenv("SENTRY_DSN")
+	if sentryDSN != "" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn:              sentryDSN,
+			Environment:      cfg.App.Env,
+			TracesSampleRate: 1.0,
+		})
+		if err == nil {
+			defer sentry.Flush(2 * time.Second)
+			log.Println("[SENTRY] Go Backend Unhandled Exception Tracking Active 🛡️")
+		}
+	} else {
+		log.Println("[SENTRY MOCK] SENTRY_DSN not set. Unhandled exceptions will log to console.")
+	}
+
+	// 3. Run Versioned SQL Migrations
 	fmt.Println("Running versioned database migrations...")
 	pgURL := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
@@ -42,13 +62,12 @@ func main() {
 	}
 	fmt.Println("Database migrations completed successfully.")
 
-	// 3. Establish Database Connection (PostgreSQL with GORM)
+	// 4. Establish Database Connection
 	db, err := gorm.Open(postgres.Open(cfg.DB.DSN()), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 
-	// Set connection pool parameters
 	sqlDB, err := db.DB()
 	if err == nil {
 		sqlDB.SetMaxOpenConns(cfg.DB.MaxOpenConns)
@@ -56,7 +75,7 @@ func main() {
 		sqlDB.SetConnMaxLifetime(cfg.DB.ConnMaxLifetime)
 	}
 
-	// 4. Initialize Shared Utility Packages (pkg/)
+	// 5. Initialize Shared Utilities
 	jwtManager := jwt.NewManager(
 		cfg.JWT.AccessSecret,
 		cfg.JWT.RefreshSecret,
@@ -77,7 +96,7 @@ func main() {
 	)
 	v := validator.New()
 
-	// 5. Initialize Data Repositories (internal/repository)
+	// 6. Initialize Repositories
 	userRepo := repository.NewUserRepository(db)
 	patientRepo := repository.NewPatientRepository(db)
 	doctorRepo := repository.NewDoctorRepository(db)
@@ -86,14 +105,17 @@ func main() {
 	medicationRepo := repository.NewMedicationRepository(db)
 	prescriptionRepo := repository.NewPrescriptionRepository(db)
 
-	// 6. Initialize Services (internal/services)
+	// 7. Initialize Services
 	authSvc := services.NewAuthService(userRepo, patientRepo, doctorRepo, jwtManager)
 	apptSvc := services.NewAppointmentService(apptRepo, queueRepo, mailClient, smsClient)
 	doctorSvc := services.NewDoctorService(doctorRepo, apptRepo)
 	pharmacySvc := services.NewPharmacyService(medicationRepo, prescriptionRepo)
 	queueSvc := services.NewQueueService(queueRepo, apptRepo, smsClient)
 
-	// 7. Initialize Handlers (internal/api/handlers)
+	// Launch Automated Background Appointment Reminder Cron Worker (polls every 15 minutes)
+	jobs.StartReminderWorker(apptSvc, 15*time.Minute)
+
+	// 8. Initialize Handlers
 	h := &routes.Handlers{
 		Auth:        handlers.NewAuthHandler(authSvc, v),
 		Doctor:      handlers.NewDoctorHandler(doctorSvc, v),
@@ -104,10 +126,35 @@ func main() {
 		Admin:       handlers.NewAdminHandler(doctorRepo, patientRepo, apptRepo, medicationRepo, prescriptionRepo),
 	}
 
-	// 8. Initialize Fiber Web App
+	// 9. Initialize Fiber App
 	app := fiber.New()
 
-	// Enforce HSTS (HTTP Strict Transport Security) and Security Headers
+	// Global Exception Handling Middleware
+	app.Use(func(c *fiber.Ctx) error {
+		defer func() {
+			if r := recover(); r != nil {
+				panicErr := fmt.Sprintf("unhandled server panic: %v", r)
+				if sentryDSN != "" {
+					sentry.CaptureMessage(panicErr)
+				}
+				log.Printf("[SENTRY CRITICAL EXCEPTION RECOVERED] %v", panicErr)
+				_ = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "An unexpected server error occurred.",
+				})
+			}
+		}()
+		return c.Next()
+	})
+
+	// Health Endpoint
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"service": "hospital-queue-api",
+			"status":  "healthy",
+		})
+	})
+
+	// Security Headers & HSTS
 	app.Use(func(c *fiber.Ctx) error {
 		c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 		c.Set("X-Content-Type-Options", "nosniff")
@@ -116,13 +163,12 @@ func main() {
 		return c.Next()
 	})
 
-	// Safely clean CORS origins to prevent Fiber panic when AllowCredentials is true
+	// CORS Setup
 	corsOrigins := strings.Join(cfg.CORS.Origins, ",")
 	if corsOrigins == "" || corsOrigins == "*" {
 		corsOrigins = "http://localhost:3000,http://localhost:5173,https://hospital-queue-1yd1.onrender.com,https://hospital-queue-frontend-a6wc.onrender.com"
 	}
 
-	// Enable CORS
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     corsOrigins,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
@@ -130,13 +176,12 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	// Serve the browsable OpenAPI specification statically
 	app.Static("/docs", "./openapi.yaml")
 
-	// 9. Register Handlers to Routes
+	// 10. Register Routes
 	routes.Register(app, h, jwtManager)
 
-	// 10. Start Server
+	// 11. Start Server
 	serverAddr := fmt.Sprintf(":%d", cfg.App.Port)
 	fmt.Printf("Starting HospitalQueue server on port %d in %s mode...\n", cfg.App.Port, cfg.App.Env)
 	if err := app.Listen(serverAddr); err != nil {
