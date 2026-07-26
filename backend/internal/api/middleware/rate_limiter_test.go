@@ -15,7 +15,6 @@ func TestStrictRateLimiter(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	// 1. Send 5 allowed requests
 	for i := 0; i < 5; i++ {
 		req := httptest.NewRequest("POST", "/api/v1/appointments", nil)
 		resp, err := app.Test(req)
@@ -24,7 +23,6 @@ func TestStrictRateLimiter(t *testing.T) {
 		}
 	}
 
-	// 2. 6th request MUST trigger HTTP 429 Too Many Requests
 	req := httptest.NewRequest("POST", "/api/v1/appointments", nil)
 	resp, err := app.Test(req)
 	if err != nil {
