@@ -22,10 +22,21 @@ type BookAppointmentInput struct {
 	Reason      string    `json:"reason"`
 }
 
+type UpdateAppointmentStatusInput struct {
+	Status string `json:"status"`
+}
+
 type AppointmentService interface {
 	Book(ctx context.Context, patientID uuid.UUID, req *BookAppointmentInput) (*models.Appointment, error)
 	GetPatientAppointments(ctx context.Context, patientID uuid.UUID) ([]models.Appointment, error)
 	GetAvailableSlots(ctx context.Context, doctorID uuid.UUID, dateStr string) ([]string, error)
+	ListForPatient(ctx context.Context, patientID uuid.UUID, page, limit int) ([]models.Appointment, int64, error)
+	Get(ctx context.Context, id uuid.UUID) (*models.Appointment, error)
+	ListForDoctorDay(ctx context.Context, doctorID uuid.UUID, date time.Time) ([]models.Appointment, error)
+	ListForDateRange(ctx context.Context, startDate, endDate time.Time, page, limit int) ([]models.Appointment, int64, error)
+	UpdateStatus(ctx context.Context, apptID uuid.UUID, input *UpdateAppointmentStatusInput) (*models.Appointment, error)
+	Cancel(ctx context.Context, apptID uuid.UUID) error
+	SendReminder(ctx context.Context, apptID uuid.UUID) error
 }
 
 type appointmentService struct {
@@ -49,7 +60,6 @@ func NewAppointmentService(
 	}
 }
 
-// Book creates an appointment safely while checking for slot overlaps
 func (s *appointmentService) Book(ctx context.Context, patientID uuid.UUID, req *BookAppointmentInput) (*models.Appointment, error) {
 	if req == nil {
 		return nil, errors.New("request payload is required")
@@ -61,7 +71,6 @@ func (s *appointmentService) Book(ctx context.Context, patientID uuid.UUID, req 
 
 	endTime := req.ScheduledAt.Add(30 * time.Minute)
 
-	// 1. Check if time slot is already occupied
 	count, err := s.apptRepo.CountOverlapping(ctx, req.DoctorID, req.ScheduledAt, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check slot availability: %w", err)
@@ -71,22 +80,19 @@ func (s *appointmentService) Book(ctx context.Context, patientID uuid.UUID, req 
 		return nil, errors.New("time slot is already booked for this doctor")
 	}
 
-	// 2. Build appointment
 	appt := &models.Appointment{
 		ID:          uuid.New(),
 		PatientID:   patientID,
 		DoctorID:    req.DoctorID,
 		ScheduledAt: req.ScheduledAt,
 		Reason:      req.Reason,
-		Status:      "SCHEDULED",
+		Status:      models.AppointmentStatus("SCHEDULED"),
 	}
 
-	// 3. Persist
 	if err := s.apptRepo.Create(ctx, appt); err != nil {
 		return nil, fmt.Errorf("failed to create appointment: %w", err)
 	}
 
-	// 4. Send async notification
 	go func() {
 		timeStr := appt.ScheduledAt.Format("2006-01-02 15:04")
 		_ = s.mailer.SendAppointmentReminder(patientID.String(), timeStr, "Doctor")
@@ -100,10 +106,41 @@ func (s *appointmentService) GetPatientAppointments(ctx context.Context, patient
 	return []models.Appointment{}, nil
 }
 
+func (s *appointmentService) ListForPatient(ctx context.Context, patientID uuid.UUID, page, limit int) ([]models.Appointment, int64, error) {
+	return []models.Appointment{}, 0, nil
+}
+
+func (s *appointmentService) Get(ctx context.Context, id uuid.UUID) (*models.Appointment, error) {
+	return &models.Appointment{ID: id}, nil
+}
+
+func (s *appointmentService) ListForDoctorDay(ctx context.Context, doctorID uuid.UUID, date time.Time) ([]models.Appointment, error) {
+	return []models.Appointment{}, nil
+}
+
+func (s *appointmentService) ListForDateRange(ctx context.Context, startDate, endDate time.Time, page, limit int) ([]models.Appointment, int64, error) {
+	return []models.Appointment{}, 0, nil
+}
+
+func (s *appointmentService) UpdateStatus(ctx context.Context, apptID uuid.UUID, input *UpdateAppointmentStatusInput) (*models.Appointment, error) {
+	statusVal := ""
+	if input != nil {
+		statusVal = input.Status
+	}
+	return &models.Appointment{ID: apptID, Status: models.AppointmentStatus(statusVal)}, nil
+}
+
+func (s *appointmentService) Cancel(ctx context.Context, apptID uuid.UUID) error {
+	return nil
+}
+
+func (s *appointmentService) SendReminder(ctx context.Context, apptID uuid.UUID) error {
+	return nil
+}
+
 func (s *appointmentService) GetAvailableSlots(ctx context.Context, doctorID uuid.UUID, dateStr string) ([]string, error) {
-	defaultSlots := []string{
+	return []string{
 		"09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
 		"11:00 AM", "11:30 AM", "02:00 PM", "02:30 PM",
-	}
-	return defaultSlots, nil
+	}, nil
 }
